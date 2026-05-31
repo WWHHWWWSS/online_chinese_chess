@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线中国象棋 - 对局记录</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .records-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .records-header h2 {
+            margin: 0;
+        }
+        .records-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .type-online {
+            background: rgba(52, 152, 219, 0.2);
+            color: #3498db;
+        }
+        .type-ai {
+            background: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+        }
+        .difficulty-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+        .difficulty-beginner {
+            background: rgba(46, 204, 113, 0.15);
+            color: #2ecc71;
+        }
+        .difficulty-master {
+            background: rgba(231, 76, 60, 0.15);
+            color: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/lobby.html" class="logo">♔ 在线中国象棋</a>
+        <div class="user-info">
+            <button class="btn btn-sm btn-primary" onclick="goBack()">返回大厅</button>
+        </div>
+    </nav>
+
+    <div class="records-container">
+        <div class="records-header">
+            <h2>对局记录</h2>
+            <div class="records-actions">
+                <button class="btn btn-sm btn-danger" onclick="deleteAllRecords()">🗑️ 一键删除</button>
+            </div>
+        </div>
+        <div id="recordsContent">
+            <div class="empty-state">
+                <p>暂无对局记录</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="replayModal" class="modal-overlay hidden">
+        <div class="modal" style="min-width: 680px; text-align: left;">
+            <h2 style="text-align: center;">对局回放</h2>
+            <div style="display: flex; gap: 20px; align-items: flex-start;">
+                <canvas id="replayBoard" width="580" height="640"></canvas>
+                <div style="flex: 1; min-width: 200px;">
+                    <div id="replayInfo" style="margin-bottom: 16px; color: #bbb; font-size: 14px;"></div>
+                    <h3 style="color: #d4a017; margin-bottom: 8px;">走棋记录</h3>
+                    <div id="replayMoveLog" class="move-log" style="max-height: 400px;"></div>
+                    <div style="margin-top: 16px; display: flex; gap: 8px;">
+                        <button class="btn btn-sm btn-primary" onclick="replayFirst()">⏮ 首步</button>
+                        <button class="btn btn-sm btn-primary" onclick="replayPrev()">◀ 上一步</button>
+                        <button class="btn btn-sm btn-success" onclick="replayNext()">下一步 ▶</button>
+                        <button class="btn btn-sm btn-primary" onclick="replayLast()">末步 ⏭</button>
+                    </div>
+                    <p style="margin-top: 8px; color: #999; font-size: 12px;">当前步数: <span id="replayStep">0</span> / <span id="replayTotal">0</span></p>
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn btn-danger" onclick="closeReplay()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/chess.js"></script>
+    <script>
+        let replayChess = null;
+        let replayMoves = [];
+        let replayStep = 0;
+        let replayCanvas = null;
+
+        async function loadRecords() {
+            try {
+                const res = await fetch('/api/room/records');
+                const data = await res.json();
+                if (data.code === 200) {
+                    renderRecords(data.data);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function renderRecords(records) {
+            const container = document.getElementById('recordsContent');
+            if (!records || records.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>暂无对局记录</p></div>';
+                return;
+            }
+
+            let html = '<table class="record-table"><thead><tr>' +
+                '<th>编号</th><th>类型</th><th>红方</th><th>黑方</th><th>结果</th><th>步数</th><th>时长</th><th>时间</th><th>操作</th>' +
+                '</tr></thead><tbody>';
+
+            records.forEach(r => {
+                const isAI = r.gameType === 1;
+                const typeBadge = isAI
+                    ? '<span class="type-badge type-ai">人机</span>'
+                    : '<span class="type-badge type-online">在线</span>';
+                const diffBadge = isAI && r.aiDifficulty
+                    ? `<span class="difficulty-badge difficulty-${r.aiDifficulty}">${r.aiDifficulty === 'master' ? '特级' : '初级'}</span>`
+                    : '';
+
+                const resultText = r.result === 0 ? '红方胜' : r.result === 1 ? '黑方胜' : '和棋';
+                const resultColor = r.result === 0 ? '#e74c3c' : r.result === 1 ? '#bbb' : '#f39c12';
+                const duration = r.duration ? Math.floor(r.duration / 60) + '分' + (r.duration % 60) + '秒' : '-';
+                const time = r.createTime ? new Date(r.createTime).toLocaleString('zh-CN') : '-';
+
+                const redName = r.redPlayerName || '-';
+                const blackName = isAI ? ('AI' + (r.aiDifficulty === 'master' ? '(特级)' : '(初级)')) : (r.blackPlayerName || '-');
+
+                html += `<tr>
+                    <td>${r.id}</td>
+                    <td>${typeBadge}${diffBadge}</td>
+                    <td style="color: #e74c3c;">${redName}</td>
+                    <td>${blackName}</td>
+                    <td style="color: ${resultColor}; font-weight: bold;">${resultText}</td>
+                    <td>${r.totalMoves || 0}</td>
+                    <td>${duration}</td>
+                    <td>${time}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="openReplay(${r.id})">回放</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteRecord(${r.id})">删除</button>
+                    </td>
+                </tr>`;
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        async function deleteRecord(recordId) {
+            if (!confirm('确定要删除这条对局记录吗？')) return;
+            try {
+                const res = await fetch('/api/room/record/' + recordId, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.code === 200) {
+                    loadRecords();
+                } else {
+                    alert(data.message || '删除失败');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('删除失败');
+            }
+        }
+
+        async function deleteAllRecords() {
+            if (!confirm('确定要删除所有对局记录吗？此操作不可恢复！')) return;
+            try {
+                const res = await fetch('/api/room/records', { method: 'DELETE' });
+                const data = await res.json();
+                if (data.code === 200) {
+                    loadRecords();
+                } else {
+                    alert(data.message || '删除失败');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('删除失败');
+            }
+        }
+
+        async function openReplay(recordId) {
+            try {
+                const res = await fetch('/api/room/record/' + recordId);
+                const data = await res.json();
+                if (data.code === 200 && data.data.moves) {
+                    replayMoves = JSON.parse(data.data.moves);
+                    replayStep = 0;
+
+                    const r = data.data;
+                    const isAI = r.gameType === 1;
+                    const redName = r.redPlayerName || '-';
+                    const blackName = isAI ? ('AI' + (r.aiDifficulty === 'master' ? '(特级)' : '(初级)')) : (r.blackPlayerName || '-');
+                    const resultText = r.result === 0 ? '红方胜' : r.result === 1 ? '黑方胜' : '和棋';
+                    const typeLabel = isAI ? '人机对战' : '在线对战';
+                    document.getElementById('replayInfo').innerHTML =
+                        `<p>类型: ${typeLabel} | 红方: ${redName} vs 黑方: ${blackName}</p>` +
+                        `<p>结果: ${resultText} | 总步数: ${r.totalMoves}</p>`;
+
+                    document.getElementById('replayModal').classList.remove('hidden');
+
+                    replayCanvas = document.getElementById('replayBoard');
+                    replayChess = new ChineseChess(replayCanvas);
+                    replayChess.draw();
+
+                    renderReplayMoveLog();
+                    updateReplayStep();
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function renderReplayMoveLog() {
+            const log = document.getElementById('replayMoveLog');
+            log.innerHTML = '';
+            replayMoves.forEach((move, i) => {
+                const colorLabel = move.pieceColor === 'red' ? '红' : '黑';
+                const item = document.createElement('div');
+                item.className = 'move-item';
+                item.id = 'replayMove' + i;
+                item.textContent = `${i + 1}. ${colorLabel} ${move.pieceName} (${move.fromX},${move.fromY})→(${move.toX},${move.toY})`;
+                log.appendChild(item);
+            });
+        }
+
+        function updateReplayStep() {
+            document.getElementById('replayStep').textContent = replayStep;
+            document.getElementById('replayTotal').textContent = replayMoves.length;
+
+            const log = document.getElementById('replayMoveLog');
+            log.querySelectorAll('.move-item').forEach((item, i) => {
+                item.style.background = i < replayStep ? 'rgba(212, 160, 23, 0.15)' : '';
+            });
+
+            const currentItem = document.getElementById('replayMove' + (replayStep - 1));
+            if (currentItem) currentItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function replayFirst() {
+            replayStep = 0;
+            replayChess = new ChineseChess(replayCanvas);
+            replayChess.draw();
+            updateReplayStep();
+        }
+
+        function replayPrev() {
+            if (replayStep <= 0) return;
+            replayStep--;
+            replayChess = new ChineseChess(replayCanvas);
+            replayChess.draw();
+            for (let i = 0; i < replayStep; i++) {
+                applyReplayMove(replayMoves[i]);
+            }
+            updateReplayStep();
+        }
+
+        function replayNext() {
+            if (replayStep >= replayMoves.length) return;
+            applyReplayMove(replayMoves[replayStep]);
+            replayStep++;
+            updateReplayStep();
+        }
+
+        function replayLast() {
+            while (replayStep < replayMoves.length) {
+                applyReplayMove(replayMoves[replayStep]);
+                replayStep++;
+            }
+            updateReplayStep();
+        }
+
+        function applyReplayMove(move) {
+            const piece = replayChess.getPieceAt(move.fromX, move.fromY);
+            if (piece) {
+                replayChess.movePiece(piece, move.toX, move.toY);
+            }
+        }
+
+        function closeReplay() {
+            document.getElementById('replayModal').classList.add('hidden');
+        }
+
+        function goBack() {
+            window.location.href = '/lobby.html';
+        }
+
+        loadRecords();
+    </script>
+</body>
+</html>

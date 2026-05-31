@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线中国象棋 - 大厅</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/lobby.html" class="logo">♔ 在线中国象棋</a>
+        <div class="user-info">
+            <span>欢迎，<span class="nickname" id="nickname"></span></span>
+            <span id="userStats"></span>
+            <button class="btn btn-sm btn-warning" onclick="viewRecords()">对局记录</button>
+            <button class="btn btn-sm btn-danger" onclick="handleLogout()">退出</button>
+        </div>
+    </nav>
+
+    <div class="lobby-container">
+        <div class="stats-bar">
+            <div class="stat-card">
+                <div class="stat-value" id="winCount">0</div>
+                <div class="stat-label">胜场</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="loseCount">0</div>
+                <div class="stat-label">负场</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="drawCount">0</div>
+                <div class="stat-label">平局</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="onlineCount">0</div>
+                <div class="stat-label">在线房间</div>
+            </div>
+        </div>
+
+        <div class="lobby-header">
+            <h2>房间列表</h2>
+            <div class="create-room-form">
+                <input type="text" id="roomNameInput" placeholder="房间名称（选填）" maxlength="20">
+                <button class="btn btn-primary" onclick="createRoom()">创建房间</button>
+                <button class="btn btn-info" onclick="showAIDialog()">人机对战</button>
+                <button class="btn btn-success" onclick="refreshRooms()">刷新</button>
+            </div>
+        </div>
+
+        <div id="roomList" class="room-list">
+            <div class="empty-state">
+                <p>暂无房间，快来创建一个吧！</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="aiDialogOverlay" class="modal-overlay hidden" style="display:none;">
+        <div class="modal" style="max-width:400px;">
+            <h3 style="text-align:center;margin-bottom:20px;">选择AI难度</h3>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <button class="btn btn-primary" style="padding:16px;font-size:16px;" onclick="playWithAI('beginner')">
+                    🟢 初级AI<br><small>本地算法，适合新手</small>
+                </button>
+                <button class="btn btn-danger" style="padding:16px;font-size:16px;" onclick="playWithAI('master')">
+                    🔴 特级AI<br><small>皮卡鱼引擎，棋力极强</small>
+                </button>
+            </div>
+            <button class="btn btn-warning" style="width:100%;margin-top:16px;" onclick="closeAIDialog()">取消</button>
+        </div>
+    </div>
+
+    <script>
+        let userInfo = null;
+
+        function getUserInfo() {
+            const stored = localStorage.getItem('userInfo');
+            if (!stored) {
+                window.location.href = '/';
+                return null;
+            }
+            return JSON.parse(stored);
+        }
+
+        async function loadUserInfo() {
+            try {
+                const res = await fetch('/api/user/info');
+                const data = await res.json();
+                if (data.code === 200) {
+                    document.getElementById('nickname').textContent = data.data.nickname || data.data.username;
+                    document.getElementById('winCount').textContent = data.data.winCount || 0;
+                    document.getElementById('loseCount').textContent = data.data.loseCount || 0;
+                    document.getElementById('drawCount').textContent = data.data.drawCount || 0;
+                    localStorage.setItem('userInfo', JSON.stringify(data.data));
+                    userInfo = data.data;
+                } else {
+                    localStorage.removeItem('userInfo');
+                    window.location.href = '/';
+                }
+            } catch (err) {
+                localStorage.removeItem('userInfo');
+                window.location.href = '/';
+            }
+        }
+
+        async function refreshRooms() {
+            try {
+                const res = await fetch('/api/room/list');
+                const data = await res.json();
+                if (data.code === 200) {
+                    renderRooms(data.data);
+                }
+            } catch (err) {
+                console.error('Failed to load rooms:', err);
+            }
+        }
+
+        function renderRooms(rooms) {
+            const container = document.getElementById('roomList');
+            const activeRooms = rooms.filter(r => r.status !== 2);
+            document.getElementById('onlineCount').textContent = activeRooms.length;
+
+            if (activeRooms.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>暂无房间，快来创建一个吧！</p></div>';
+                return;
+            }
+
+            container.innerHTML = activeRooms.map(room => {
+                const statusText = room.status === 0 ? '等待中' : '对战中';
+                const statusClass = room.status === 0 ? 'waiting' : 'playing';
+                const canJoin = room.status === 0 && room.redPlayerId !== userInfo.id;
+
+                return `
+                    <div class="room-card">
+                        <div class="room-name">${escapeHtml(room.roomName)}</div>
+                        <div class="room-info">
+                            <span class="room-status ${statusClass}">${statusText}</span>
+                            <span>房间 #${room.id}</span>
+                        </div>
+                        <div class="room-players">
+                            <div class="player-slot red">
+                                红方: ${room.redPlayerName || '等待加入'}
+                            </div>
+                            <div class="player-slot ${room.blackPlayerName ? 'black' : 'empty'}">
+                                黑方: ${room.blackPlayerName || '等待加入'}
+                            </div>
+                        </div>
+                        ${canJoin ? `<button class="btn btn-primary btn-block" onclick="joinRoom(${room.id})">加入房间</button>` : ''}
+                        ${room.redPlayerId === userInfo.id && room.status === 0 ? `<button class="btn btn-danger btn-block" onclick="cancelRoom(${room.id})">取消房间</button>` : ''}
+                        ${room.status === 1 && (room.redPlayerId === userInfo.id || room.blackPlayerId === userInfo.id) ? `<button class="btn btn-success btn-block" onclick="enterRoom(${room.id})">进入对局</button>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function createRoom() {
+            const roomName = document.getElementById('roomNameInput').value.trim() || '象棋房间';
+            try {
+                const res = await fetch('/api/room/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ roomName })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    showToast('房间创建成功！', 'success');
+                    window.location.href = '/game.html?roomId=' + data.data.id;
+                } else {
+                    showToast(data.message, 'error');
+                }
+            } catch (err) {
+                showToast('创建失败', 'error');
+            }
+        }
+
+        async function joinRoom(roomId) {
+            try {
+                const res = await fetch('/api/room/join/' + roomId, {
+                    method: 'POST'
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    showToast('加入成功！', 'success');
+                    window.location.href = '/game.html?roomId=' + roomId;
+                } else {
+                    showToast(data.message, 'error');
+                }
+            } catch (err) {
+                showToast('加入失败', 'error');
+            }
+        }
+
+        async function cancelRoom(roomId) {
+            try {
+                await fetch('/api/room/leave/' + roomId, { method: 'POST' });
+                refreshRooms();
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function enterRoom(roomId) {
+            window.location.href = '/game.html?roomId=' + roomId;
+        }
+
+        function showAIDialog() {
+            var overlay = document.getElementById('aiDialogOverlay');
+            overlay.style.display = 'flex';
+            overlay.classList.remove('hidden');
+        }
+
+        function closeAIDialog() {
+            var overlay = document.getElementById('aiDialogOverlay');
+            overlay.style.display = 'none';
+        }
+
+        function playWithAI(difficulty) {
+            window.location.href = '/game.html?mode=ai&difficulty=' + (difficulty || 'beginner');
+        }
+
+        function viewRecords() {
+            window.location.href = '/records.html';
+        }
+
+        async function handleLogout() {
+            try {
+                await fetch('/api/user/logout', { method: 'POST' });
+            } catch (e) {}
+            localStorage.removeItem('userInfo');
+            window.location.href = '/';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        (async function init() {
+            userInfo = getUserInfo();
+            if (!userInfo) return;
+            document.getElementById('nickname').textContent = userInfo.nickname || userInfo.username;
+            await loadUserInfo();
+            await refreshRooms();
+            setInterval(refreshRooms, 5000);
+        })();
+    </script>
+</body>
+</html>

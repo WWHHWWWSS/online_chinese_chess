@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线中国象棋 - 对局</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/lobby.html" class="logo">♔ 在线中国象棋</a>
+        <div class="user-info">
+            <span id="roomInfo">房间加载中...</span>
+            <button class="btn btn-sm btn-warning" onclick="goBack()">返回大厅</button>
+        </div>
+    </nav>
+
+    <div class="game-container">
+        <div class="game-sidebar">
+            <div class="sidebar-card">
+                <div id="turnIndicator" class="turn-indicator red-turn">红方先行</div>
+                <div id="blackPlayerCard" class="player-info-card black-player">
+                    <div class="player-color black"></div>
+                    <div>
+                        <div class="player-name" id="blackPlayerName">等待黑方加入...</div>
+                        <div class="player-label">黑方</div>
+                    </div>
+                </div>
+                <div id="redPlayerCard" class="player-info-card red-player">
+                    <div class="player-color red"></div>
+                    <div>
+                        <div class="player-name" id="redPlayerName">红方</div>
+                        <div class="player-label">红方</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-card">
+                <h3>走棋记录</h3>
+                <div class="move-log" id="moveLog"></div>
+            </div>
+
+            <div class="sidebar-card chat-box">
+                <h3>聊天</h3>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-input-row">
+                    <input type="text" id="chatInput" placeholder="输入消息..." onkeydown="if(event.key==='Enter')sendChat()">
+                    <button class="btn btn-sm btn-primary" onclick="sendChat()">发送</button>
+                </div>
+            </div>
+
+            <div class="game-actions">
+                <button id="readyBtn" class="btn btn-success btn-block" onclick="playerReady()" style="display:none">准备</button>
+                <button id="switchSideBtn" class="btn btn-info btn-block" onclick="switchSide()" style="display:none">换边</button>
+                <button class="btn btn-warning btn-block" onclick="requestDraw()">求和</button>
+                <button class="btn btn-danger btn-block" onclick="surrender()">认输</button>
+            </div>
+        </div>
+
+        <div class="board-wrapper">
+            <canvas id="chessBoard" width="580" height="640"></canvas>
+        </div>
+    </div>
+
+    <div id="modalOverlay" class="modal-overlay hidden">
+        <div class="modal">
+            <h2 id="modalTitle">游戏结束</h2>
+            <p id="modalMessage"></p>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="goBack()">返回大厅</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/chess.js"></script>
+    <script src="js/openingbook.js"></script>
+    <script src="js/chess-ai.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>
