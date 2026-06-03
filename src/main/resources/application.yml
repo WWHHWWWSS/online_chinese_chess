@@ -9,6 +9,12 @@ spring:
     username: root
     password: 1234560
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
   sql:
     init:
       mode: always
@@ -22,7 +28,7 @@ mybatis:
 
 logging:
   level:
-    com.chess.online: debug
+    com.chess.online: info
 
 pikafish:
   path: engine/pikafish.exe

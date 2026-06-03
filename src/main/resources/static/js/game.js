@@ -63,7 +63,7 @@ function initAIMode() {
     chess.setFlipped(false);
     chess.draw();
 
-    var diffLabel = aiDifficulty === 'master' ? '特级AI（皮卡鱼）' : '初级AI';
+    let diffLabel = aiDifficulty === 'master' ? '特级AI（皮卡鱼）' : '初级AI';
     document.getElementById('roomInfo').textContent = '人机对战 - ' + diffLabel;
     document.getElementById('redPlayerName').textContent = userInfo.nickname || userInfo.username || '你';
     document.getElementById('blackPlayerName').textContent = diffLabel;
@@ -139,8 +139,11 @@ function beginnerAIMove() {
 
     const bestMove = ai.getBestMove();
     if (!bestMove) {
-        const result = myColor === 'red' ? 0 : 1;
-        endGame(result, 'checkmate');
+        const aiColor = myColor === 'red' ? 'black' : 'red';
+        if (chess.isCheckmate(aiColor)) {
+            const result = myColor === 'red' ? 0 : 1;
+            endGame(result, 'checkmate');
+        }
         return;
     }
 
@@ -153,7 +156,7 @@ function beginnerAIMove() {
 }
 
 function pikafishMove() {
-    var fen = chess.toFEN();
+    const fen = chess.toFEN();
 
     fetch('/api/ai/move', {
         method: 'POST',
@@ -161,9 +164,9 @@ function pikafishMove() {
         body: JSON.stringify({ fen: fen, depth: 20 })
     }).then(function (res) { return res.json(); }).then(function (data) {
         if (data.code === 200 && data.bestMove) {
-            var move = parsePikafishMove(data.bestMove);
+            const move = parsePikafishMove(data.bestMove);
             if (move) {
-                var moveData = chess.applyFENMove(move.fromX, move.fromY, move.toX, move.toY);
+                const moveData = chess.applyFENMove(move.fromX, move.fromY, move.toX, move.toY);
                 if (moveData) {
                     allMoves.push(moveData);
                     addMoveLog(moveData);
@@ -189,10 +192,10 @@ function pikafishMove() {
 function parsePikafishMove(moveStr) {
     if (!moveStr || moveStr.length < 4) return null;
 
-    var fromCol = moveStr.charCodeAt(0) - 'a'.charCodeAt(0);
-    var fromRow = 9 - parseInt(moveStr[1]);
-    var toCol = moveStr.charCodeAt(2) - 'a'.charCodeAt(0);
-    var toRow = 9 - parseInt(moveStr[3]);
+    const fromCol = moveStr.charCodeAt(0) - 'a'.charCodeAt(0);
+    const fromRow = 9 - parseInt(moveStr[1]);
+    const toCol = moveStr.charCodeAt(2) - 'a'.charCodeAt(0);
+    const toRow = 9 - parseInt(moveStr[3]);
 
     if (fromCol < 0 || fromCol > 8 || fromRow < 0 || fromRow > 9 ||
         toCol < 0 || toCol > 8 || toRow < 0 || toRow > 9) return null;
@@ -548,9 +551,6 @@ function surrender() {
             roomId: parseInt(roomId),
             userId: userInfo.id
         }));
-
-        const result = myColor === 'red' ? 1 : 0;
-        endGame(result, 'surrender');
     }
 }
 
@@ -600,14 +600,14 @@ function switchSide() {
 
         allMoves = [];
 
-        var newPlayerColor = myColor === 'red' ? 'black' : 'red';
+        const newPlayerColor = myColor === 'red' ? 'black' : 'red';
         myColor = newPlayerColor;
         iAmReady = false;
 
         chess.setFlipped(newPlayerColor === 'black');
         chess.draw();
 
-        var diffLabel = aiDifficulty === 'master' ? '特级AI（皮卡鱼）' : '初级AI';
+        const diffLabel = aiDifficulty === 'master' ? '特级AI（皮卡鱼）' : '初级AI';
 
         if (newPlayerColor === 'red') {
             document.getElementById('redPlayerName').textContent = userInfo.nickname || userInfo.username || '你';
