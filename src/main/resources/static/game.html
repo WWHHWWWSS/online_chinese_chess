@@ -72,6 +72,17 @@
         </div>
     </div>
 
+    <div id="drawModalOverlay" class="modal-overlay hidden">
+        <div class="modal">
+            <h2>求和请求</h2>
+            <p>对手请求求和，是否同意？</p>
+            <div class="modal-actions">
+                <button class="btn btn-success" onclick="respondDraw(true)">同意</button>
+                <button class="btn btn-danger" onclick="respondDraw(false)">拒绝</button>
+            </div>
+        </div>
+    </div>
+
     <script src="js/chess.js"></script>
     <script src="js/openingbook.js"></script>
     <script src="js/chess-ai.js"></script>

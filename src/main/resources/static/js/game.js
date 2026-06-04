@@ -518,21 +518,18 @@ function requestDraw() {
 }
 
 function handleDrawRequest(msg) {
-    if (confirm('对手请求求和，是否同意？')) {
-        ws.send(JSON.stringify({
-            type: 'draw_response',
-            roomId: parseInt(roomId),
-            userId: userInfo.id,
-            accepted: true
-        }));
-    } else {
-        ws.send(JSON.stringify({
-            type: 'draw_response',
-            roomId: parseInt(roomId),
-            userId: userInfo.id,
-            accepted: false
-        }));
-    }
+    document.getElementById('drawModalOverlay').classList.remove('hidden');
+}
+
+function respondDraw(accepted) {
+    document.getElementById('drawModalOverlay').classList.add('hidden');
+    if (!ws) return;
+    ws.send(JSON.stringify({
+        type: 'draw_response',
+        roomId: parseInt(roomId),
+        userId: userInfo.id,
+        accepted: accepted
+    }));
 }
 
 function surrender() {
