@@ -160,4 +160,8 @@ public class RoomService {
         roomMapper.swapPlayers(roomId, room.getRedPlayerId(), room.getBlackPlayerId());
         return roomMapper.findById(roomId);
     }
+
+    public void resetRoomToWaiting(Long roomId) {
+        roomMapper.resetToWaiting(roomId);
+    }
 }

@@ -51,4 +51,7 @@ public interface RoomMapper {
 
     @Update("UPDATE room SET red_player_id = #{blackPlayerId}, black_player_id = #{redPlayerId} WHERE id = #{id}")
     int swapPlayers(@Param("id") Long id, @Param("redPlayerId") Long redPlayerId, @Param("blackPlayerId") Long blackPlayerId);
+
+    @Update("UPDATE room SET black_player_id = NULL, status = 0 WHERE id = #{id}")
+    int resetToWaiting(Long id);
 }

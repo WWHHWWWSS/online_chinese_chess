@@ -95,11 +95,13 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                             broadcastToRoom(roomId, msg.toString(), userId);
 
                             roomGameMap.remove(roomId);
+                            roomService.resetRoomToWaiting(roomId);
                         } else {
                             ObjectNode msg = objectMapper.createObjectNode();
                             msg.put("type", "opponent_disconnected");
                             msg.put("userId", userId);
                             broadcastToRoom(roomId, msg.toString(), userId);
+                            roomService.resetRoomToWaiting(roomId);
                         }
                     }
                 }
@@ -290,11 +292,13 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             msg.put("userId", userId);
             broadcastToRoom(roomId, msg.toString(), userId);
             roomGameMap.remove(roomId);
+            roomService.resetRoomToWaiting(roomId);
         } else {
             ObjectNode msg = objectMapper.createObjectNode();
             msg.put("type", "opponent_disconnected");
             msg.put("userId", userId);
             broadcastToRoom(roomId, msg.toString(), userId);
+            roomService.resetRoomToWaiting(roomId);
         }
     }
 
