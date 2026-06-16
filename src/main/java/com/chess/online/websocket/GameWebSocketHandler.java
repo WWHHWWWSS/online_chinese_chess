@@ -304,7 +304,6 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
     private void handleSwitchSide(WebSocketSession session, JsonNode json) throws IOException {
         Long roomId = json.get("roomId").asLong();
-        Long userId = json.get("userId").asLong();
 
         RoomGame game = roomGameMap.get(roomId);
         if (game == null) return;
