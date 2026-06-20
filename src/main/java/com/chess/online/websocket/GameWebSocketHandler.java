@@ -78,43 +78,72 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         sessions.remove(session.getId());
 
+        // 找到断开连接的 userId
+        Long userId = null;
         for (Map.Entry<Long, String> entry : userSessionMap.entrySet()) {
             if (entry.getValue().equals(session.getId())) {
-                Long userId = entry.getKey();
+                userId = entry.getKey();
                 userSessionMap.remove(userId);
-
-                for (Map.Entry<Long, RoomGame> roomEntry : roomGameMap.entrySet()) {
-                    RoomGame game = roomEntry.getValue();
-                    if (userId.equals(game.getRedUserId()) || userId.equals(game.getBlackUserId())) {
-                        Long roomId = roomEntry.getKey();
-
-                        if (userId.equals(game.getRedUserId())) {
-                            ObjectNode msg = objectMapper.createObjectNode();
-                            msg.put("type", "host_left");
-                            msg.put("userId", userId);
-                            broadcastToRoom(roomId, msg.toString(), userId);
-
-                            roomGameMap.remove(roomId);
-                            roomService.resetRoomToWaiting(roomId);
-                        } else {
-                            ObjectNode msg = objectMapper.createObjectNode();
-                            msg.put("type", "opponent_disconnected");
-                            msg.put("userId", userId);
-                            broadcastToRoom(roomId, msg.toString(), userId);
-                            roomService.resetRoomToWaiting(roomId);
-                        }
-                    }
-                }
                 break;
             }
         }
 
-        log.info("WebSocket disconnected: {}, status: {}", session.getId(), status);
+        if (userId == null) {
+            log.info("WebSocket disconnected: {}, status: {}", session.getId(), status);
+            return;
+        }
+
+        // 找到用户所在的房间（不在遍历中修改 Map）
+        Long roomId = null;
+        RoomGame game = null;
+        for (Map.Entry<Long, RoomGame> roomEntry : roomGameMap.entrySet()) {
+            RoomGame g = roomEntry.getValue();
+            if (userId.equals(g.getRedUserId()) || userId.equals(g.getBlackUserId())) {
+                roomId = roomEntry.getKey();
+                game = g;
+                break;
+            }
+        }
+
+        if (roomId == null || game == null) {
+            log.info("WebSocket disconnected: {}, userId: {}, status: {}", session.getId(), userId, status);
+            return;
+        }
+
+        if (userId.equals(game.getRedUserId())) {
+            // 房主（红方）离开，解散房间
+            ObjectNode msg = objectMapper.createObjectNode();
+            msg.put("type", "host_left");
+            msg.put("userId", userId);
+            broadcastToRoom(roomId, msg.toString(), userId);
+
+            roomGameMap.remove(roomId);
+            roomService.resetRoomToWaiting(roomId);
+        } else {
+            // 黑方离开，清理黑方信息（避免新玩家加入时状态不一致）
+            ObjectNode msg = objectMapper.createObjectNode();
+            msg.put("type", "opponent_disconnected");
+            msg.put("userId", userId);
+            broadcastToRoom(roomId, msg.toString(), userId);
+
+            game.setBlackUserId(null);
+            game.setBlackReady(false);
+            roomService.resetRoomToWaiting(roomId);
+        }
+
+        log.info("WebSocket disconnected: {}, userId: {}, status: {}", session.getId(), userId, status);
     }
 
     private void handleAuth(WebSocketSession session, JsonNode json) throws IOException {
+        if (!json.has("userId") || json.get("userId").isNull()) {
+            ObjectNode msg = objectMapper.createObjectNode();
+            msg.put("type", "error");
+            msg.put("message", "userId不能为空");
+            sendMessage(session, msg.toString());
+            return;
+        }
         Long userId = json.get("userId").asLong();
-        Long roomId = json.has("roomId") ? json.get("roomId").asLong() : null;
+        Long roomId = json.has("roomId") && !json.get("roomId").isNull() ? json.get("roomId").asLong() : null;
 
         userSessionMap.put(userId, session.getId());
 
@@ -137,7 +166,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             ObjectNode notifyMsg = objectMapper.createObjectNode();
             notifyMsg.put("type", "player_joined");
             notifyMsg.put("userId", userId);
-            broadcastToRoom(roomId, notifyMsg.toString(), null);
+            broadcastToRoom(roomId, notifyMsg.toString(), userId);
 
             if (game.getRedUserId() != null && game.getBlackUserId() != null) {
                 Room room = roomService.getRoom(roomId);
@@ -298,6 +327,8 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             msg.put("type", "opponent_disconnected");
             msg.put("userId", userId);
             broadcastToRoom(roomId, msg.toString(), userId);
+            game.setBlackUserId(null);
+            game.setBlackReady(false);
             roomService.resetRoomToWaiting(roomId);
         }
     }

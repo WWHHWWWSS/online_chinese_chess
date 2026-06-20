@@ -10,6 +10,7 @@ let iAmReady = false;
 let isAIMode = false;
 let aiDifficulty = 'beginner';
 let ai = null;
+let wsReconnectTimer = null;
 
 function init() {
     const stored = localStorage.getItem('userInfo');
@@ -265,7 +266,13 @@ function connectWebSocket() {
 
     ws.onclose = function () {
         console.log('WebSocket disconnected');
-        showToast('连接断开，请刷新页面重试', 'error');
+        if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+        if (gameStarted) {
+            showToast('连接断开，请刷新页面重试', 'error');
+        } else {
+            showToast('连接断开，3秒后重连...', 'error');
+            wsReconnectTimer = setTimeout(connectWebSocket, 3000);
+        }
     };
 
     ws.onerror = function (err) {
@@ -310,6 +317,15 @@ function handleWebSocketMessage(msg) {
             break;
 
         case 'game_start':
+            if (msg.redUserId === userInfo.id) {
+                myColor = 'red';
+            } else if (msg.blackUserId === userInfo.id) {
+                myColor = 'black';
+            }
+            if (myColor) {
+                chess.setFlipped(myColor === 'black');
+                chess.draw();
+            }
             gameStarted = true;
             startTime = Date.now();
             loadRoomInfo();
